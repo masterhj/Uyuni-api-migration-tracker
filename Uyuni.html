@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uyuni API Migration Tracker</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #1a1a2e; font-size: 14px; }
+  .header { background: #1a1a2e; color: white; padding: 20px 28px; }
+  .header h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .header p { font-size: 13px; opacity: 0.65; }
+  .container { padding: 20px 28px; max-width: 1400px; margin: 0 auto; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: white; border-radius: 10px; padding: 14px 16px; border: 1px solid #e8e9ed; }
+  .stat-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .stat-val { font-size: 26px; font-weight: 600; }
+  .stat-val.blue { color: #2563eb; }
+  .stat-val.green { color: #16a34a; }
+  .stat-val.amber { color: #d97706; }
+  .stat-val.red { color: #dc2626; }
+  .stat-val.purple { color: #7c3aed; }
+  .progress-wrap { background: white; border-radius: 10px; padding: 16px 18px; border: 1px solid #e8e9ed; margin-bottom: 20px; }
+  .progress-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 10px; }
+  .progress-bar { height: 10px; background: #f0f0f0; border-radius: 5px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #16a34a); border-radius: 5px; transition: width .3s; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
+  .controls input { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background: white; outline: none; }
+  .controls input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px #2563eb22; }
+  .controls select { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background: white; cursor: pointer; outline: none; }
+  .controls select:focus { border-color: #2563eb; }
+  .count-info { font-size: 13px; color: #6b7280; white-space: nowrap; }
+  .tbl-wrap { background: white; border-radius: 10px; border: 1px solid #e8e9ed; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { background: #f8f9fa; padding: 11px 14px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; border-bottom: 1px solid #e8e9ed; cursor: pointer; user-select: none; white-space: nowrap; }
+  thead th:hover { background: #f0f1f3; color: #374151; }
+  tbody tr { border-bottom: 1px solid #f3f4f6; transition: background .1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #f8f9ff; }
+  td { padding: 9px 14px; vertical-align: middle; }
+  .ns { font-weight: 600; color: #1a1a2e; font-family: monospace; font-size: 12px; }
+  .method { color: #374151; }
+  .params { color: #6b7280; font-size: 12px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ret { color: #6b7280; font-size: 12px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .badge.get { background: #dbeafe; color: #1d4ed8; }
+  .badge.post { background: #dcfce7; color: #15803d; }
+  .badge.migrated { background: #dcfce7; color: #15803d; }
+  .badge.not-migrated { background: #f3f4f6; color: #6b7280; }
+  .badge.http-ignored { background: #fef3c7; color: #b45309; }
+  .badge.low { background: #e0f2fe; color: #0369a1; }
+  .badge.medium { background: #fef3c7; color: #b45309; }
+  .badge.high { background: #fee2e2; color: #b91c1c; }
+  .notes { color: #9ca3af; font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; font-size: 12px; color: #6b7280; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .no-results { padding: 40px; text-align: center; color: #9ca3af; }
+  @media (max-width: 768px) { .container { padding: 14px; } .header { padding: 16px; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Uyuni API Migration Tracker</h1>
+  <p>OpenAPI/Swagger Migration — GSoC 2026 | Tracking all API methods across 65 namespaces</p>
+</div>
+<div class="container">
+  <div class="stats" id="stats"></div>
+  <div class="progress-wrap">
+    <div class="progress-header">
+      <span style="font-weight:600">Overall Migration Progress</span>
+      <span id="pct" style="font-weight:600;color:#2563eb">0%</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="pbar" style="width:0%"></div></div>
+  </div>
+  <div class="controls">
+    <input type="text" id="search" placeholder="Search namespace, method, parameters..." />
+    <select id="filterNs"><option value="">All namespaces</option></select>
+    <select id="filterStatus"><option value="">All statuses</option><option value="Migrated">Migrated</option><option value="Not Migrated">Not Migrated</option></select>
+    <select id="filterMethod"><option value="">All HTTP methods</option><option value="GET">GET</option><option value="POST">POST</option></select>
+    <select id="filterComplexity"><option value="">All complexity</option><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option></select>
+    <span class="count-info" id="count-info"></span>
+  </div>
+  <div class="legend">
+    <strong style="color:#374151">Legend:</strong>
+    <span><span class="badge migrated">Migrated</span> Done</span>
+    <span><span class="badge not-migrated">Not Migrated</span> Pending</span>
+    <span><span class="badge http-ignored">HTTP Ignored</span> XML-RPC only</span>
+    <span><span class="badge low">Low</span> Simple</span>
+    <span><span class="badge medium">Medium</span> Moderate</span>
+    <span><span class="badge high">High</span> Complex</span>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th onclick="sortBy('namespace')"># <span id="s-ns"></span></th>
+          <th onclick="sortBy('namespace')">Namespace</th>
+          <th onclick="sortBy('method')">Method</th>
+          <th onclick="sortBy('http')">HTTP</th>
+          <th>Parameters</th>
+          <th>Return Type</th>
+          <th onclick="sortBy('status')">Status</th>
+          <th onclick="sortBy('complexity')">Complexity</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="no-results" id="no-results" style="display:none">No methods match your filters.</div>
+  </div>
+</div>
+<script>
+const RAW = `namespace,method,http,params,ret,status,complexity,notes
+access,createRole,POST,"sessionKey, label, description, permissionsFrom (optional)",struct access group,Migrated,Low,Method overloaded
+access,createRole,POST,"sessionKey, label, description",struct access group,Migrated,Low,Overloaded variant
+access,deleteRole,POST,"sessionKey, label",int,Migrated,Low,Returns 1 on success
+access,grantAccess,POST,"sessionKey, label, namespaces",int,Migrated,Low,Method overloaded
+access,grantAccess,POST,"sessionKey, label, namespaces, modes",int,Migrated,Low,Overloaded with modes
+access,listNamespaces,GET,sessionKey,array of struct,Migrated,Low,
+access,listPermissions,GET,"sessionKey, label",array of struct,Migrated,Low,
+access,listRoles,GET,sessionKey,array of struct,Migrated,Low,
+access,revokeAccess,POST,"sessionKey, label, namespaces",int,Migrated,Low,Method overloaded
+access,revokeAccess,POST,"sessionKey, label, namespaces, modes",int,Migrated,Low,Overloaded with modes
+api,systemVersion,GET,(none - public endpoint),string,Migrated,Low,@PublicApiEndpoint
+api,productName,GET,(none - public endpoint),string,Migrated,Low,@PublicApiEndpoint
+api,getVersion,GET,(none - public endpoint),string,Migrated,Low,@PublicApiEndpoint
+api,getApiNamespaces,GET,(none - public endpoint),Map<String String>,Migrated,Medium,@PublicApiEndpoint
+api,getApiCallList,GET,(none - public endpoint),Map<String Object>,Migrated,High,Complex return type
+api,getApiNamespaceCallList,GET,namespace,Map,Migrated,High,Raw Map return type
+admin.monitoring,enable,POST,sessionKey,Map<String String>,Migrated,Low,
+admin.monitoring,disable,POST,sessionKey,Map<String String>,Migrated,Low,
+admin.monitoring,getStatus,GET,sessionKey,Map<String String>,Migrated,Low,
+actionchain,addConfigurationDeployment,POST,"sessionKey, actionChainLabel, serverId, revisionSpecifiers",int,Not Migrated,Medium,
+actionchain,addErrataUpdate,POST,"sessionKey, actionChainLabel, serverIds, errataIds",int,Not Migrated,Medium,
+actionchain,addPackageInstall,POST,"sessionKey, actionChainLabel, serverId, packages",int,Not Migrated,Medium,Complex package array
+actionchain,addPackageRemoval,POST,"sessionKey, actionChainLabel, serverId, packages",int,Not Migrated,Medium,
+actionchain,addPackageUpgrade,POST,"sessionKey, actionChainLabel, serverId, packages",int,Not Migrated,Medium,
+actionchain,addScriptRun,POST,"sessionKey, actionChainLabel, serverId, uid, gid, timeout, script",int,Not Migrated,Medium,
+actionchain,addSystemReboot,POST,"sessionKey, actionChainLabel, serverId",int,Not Migrated,Low,
+actionchain,createChain,POST,"sessionKey, chainLabel",int,Not Migrated,Low,
+actionchain,deleteChain,POST,"sessionKey, chainLabel",int,Not Migrated,Low,
+actionchain,deleteEntry,POST,"sessionKey, chainLabel, entryId",int,Not Migrated,Low,
+actionchain,listChainActions,GET,"sessionKey, chainLabel",array of struct,Not Migrated,Low,
+actionchain,listChains,GET,sessionKey,array of struct,Not Migrated,Low,
+actionchain,renameChain,POST,"sessionKey, chainLabel, newLabel",int,Not Migrated,Low,
+actionchain,renameEntry,POST,"sessionKey, chainLabel, entryId, newLabel",int,Not Migrated,Low,
+actionchain,scheduleChain,POST,"sessionKey, chainLabel, date",int,Not Migrated,Low,
+activationkey,addChildChannels,POST,"sessionKey, key, channelLabels",int,Not Migrated,Low,
+activationkey,addEntitlements,POST,"sessionKey, key, entitlements",int,Not Migrated,Low,
+activationkey,addPackages,POST,"sessionKey, key, packages",int,Not Migrated,Medium,Package array struct
+activationkey,addServerGroups,POST,"sessionKey, key, serverGroupIds",int,Not Migrated,Low,
+activationkey,checkConfigDeployment,GET,"sessionKey, key",int,Not Migrated,Low,
+activationkey,create,POST,"sessionKey, keyDescription, keyLimit, baseChannelLabel, entitlements, universalDefault",string,Not Migrated,Medium,Many params
+activationkey,delete,POST,"sessionKey, key",int,Not Migrated,Low,
+activationkey,disableConfigDeployment,POST,"sessionKey, key",int,Not Migrated,Low,
+activationkey,enableConfigDeployment,POST,"sessionKey, key",int,Not Migrated,Low,
+activationkey,getDetails,GET,"sessionKey, key",struct,Not Migrated,Medium,Complex return struct
+activationkey,listActivatedSystems,GET,"sessionKey, key",array of struct,Not Migrated,Low,
+activationkey,listActivationKeys,GET,sessionKey,array of struct,Not Migrated,Low,
+activationkey,listChannelSystems,GET,"sessionKey, channelLabel",array of struct,Not Migrated,Low,
+activationkey,listConfigChannels,GET,"sessionKey, key",array of struct,Not Migrated,Low,
+activationkey,removeChildChannels,POST,"sessionKey, key, channelLabels",int,Not Migrated,Low,
+activationkey,removeEntitlements,POST,"sessionKey, key, entitlements",int,Not Migrated,Low,
+activationkey,removePackages,POST,"sessionKey, key, packages",int,Not Migrated,Medium,Package array
+activationkey,removeServerGroups,POST,"sessionKey, key, serverGroupIds",int,Not Migrated,Low,
+activationkey,setConfigChannels,POST,"sessionKey, key, configChannelLabels",int,Not Migrated,Low,
+activationkey,setDetails,POST,"sessionKey, key, details",int,Not Migrated,Medium,Details struct
+admin.configuration,getConfig,GET,sessionKey,struct,Not Migrated,Medium,8 constructor deps
+admin.configuration,setConfig,POST,"sessionKey, config",int,Not Migrated,Medium,8 constructor deps
+admin.payg,create,POST,"sessionKey, details",struct,Not Migrated,Medium,
+admin.payg,delete,POST,"sessionKey, hostname",int,Not Migrated,Low,
+admin.payg,getDetails,GET,"sessionKey, hostname",struct,Not Migrated,Medium,
+admin.payg,list,GET,sessionKey,array of struct,Not Migrated,Low,
+admin.payg,setDetails,POST,"sessionKey, hostname, details",struct,Not Migrated,Medium,
+ansible,discoverPlaybooks,POST,"sessionKey, controlNodeId",struct,Not Migrated,Medium,
+ansible,fetchPlaybookContents,POST,"sessionKey, playbookPath, controlNodeId",string,Not Migrated,Low,
+ansible,getAnsiblePath,GET,"sessionKey, ansiblePathId",struct,Not Migrated,Low,
+ansible,introspectInventory,POST,"sessionKey, controlNodeId",struct,Not Migrated,Medium,
+ansible,listAnsiblePaths,GET,"sessionKey, controlNodeId",array of struct,Not Migrated,Low,
+ansible,removeAnsiblePath,POST,"sessionKey, ansiblePathId",int,Not Migrated,Low,
+ansible,schedulePlaybook,POST,"sessionKey, playbookPath, inventoryPath, controlNodeId, earliestOccurrence, testMode",int,Not Migrated,High,Many params
+ansible,createAnsiblePath,POST,"sessionKey, pathMap",int,Not Migrated,Medium,Map param
+ansible,updateAnsiblePath,POST,"sessionKey, ansiblePathId, pathMap",int,Not Migrated,Medium,Map param
+audit,listSystemEvents,GET,"sessionKey, cveIdentifier",array of struct,Not Migrated,Medium,
+audit,listUserEvents,GET,"sessionKey, cveIdentifier",array of struct,Not Migrated,Medium,
+auth,login,POST,"username, password, duration",string,Not Migrated,Low,@ApiIgnore(HTTP) - XML-RPC only
+auth,logout,POST,sessionKey,int,Not Migrated,Low,@ApiIgnore(HTTP) - XML-RPC only
+channel,listAllChannels,GET,sessionKey,array of struct,Not Migrated,Low,
+channel,listMyChannels,GET,sessionKey,array of struct,Not Migrated,Low,
+channel,listPopularChannels,GET,"sessionKey, popularity",array of struct,Not Migrated,Low,
+channel,listRedHatChannels,GET,sessionKey,array of struct,Not Migrated,Low,
+channel,listRetiredChannels,GET,sessionKey,array of struct,Not Migrated,Low,
+channel,listSharedChannels,GET,sessionKey,array of struct,Not Migrated,Low,
+channel,listSoftwareChannels,GET,sessionKey,array of struct,Not Migrated,Low,
+channel,listVendorChannels,GET,sessionKey,array of struct,Not Migrated,Low,
+channel.access,disableUserRestrictions,POST,"sessionKey, channelLabel",int,Not Migrated,Low,Good first candidate
+channel.access,enableUserRestrictions,POST,"sessionKey, channelLabel",int,Not Migrated,Low,Good first candidate
+channel.access,getOrgSharing,GET,"sessionKey, channelLabel",string,Not Migrated,Low,Enum-like: public/private/protected
+channel.access,setOrgSharing,POST,"sessionKey, channelLabel, access",int,Not Migrated,Low,Constrained string param
+channel.appstreams,disableModuleStreams,POST,"sessionKey, channelLabel, moduleStreamDataList",int,Not Migrated,High,Complex array of structs
+channel.appstreams,enableModuleStreams,POST,"sessionKey, channelLabel, moduleStreamDataList",int,Not Migrated,High,Complex array of structs
+channel.appstreams,listModuleStreams,GET,"sessionKey, channelLabel",array of struct,Not Migrated,Low,
+channel.org,disableAccess,POST,"sessionKey, channelLabel, orgId",int,Not Migrated,Low,
+channel.org,enableAccess,POST,"sessionKey, channelLabel, orgId",int,Not Migrated,Low,
+channel.org,list,GET,"sessionKey, channelLabel",array of struct,Not Migrated,Low,
+channel.software,addPackages,POST,"sessionKey, channelLabel, packageIds",int,Not Migrated,Low,
+channel.software,associateRepo,POST,"sessionKey, channelLabel, repoLabel",int,Not Migrated,Low,
+channel.software,clone,POST,"sessionKey, originalLabel, channelDetails, originalState",int,Not Migrated,High,Complex struct param
+channel.software,create,POST,"sessionKey, channelLabel, channelName, channelSummary, archLabel, parentLabel",int,Not Migrated,Medium,
+channel.software,delete,POST,"sessionKey, channelLabel",int,Not Migrated,Low,
+channel.software,disassociateRepo,POST,"sessionKey, channelLabel, repoLabel",int,Not Migrated,Low,
+channel.software,getDetails,GET,"sessionKey, channelLabel",struct,Not Migrated,Medium,Complex return struct
+channel.software,listAllPackages,GET,"sessionKey, channelLabel",array of struct,Not Migrated,Low,
+channel.software,listArches,GET,sessionKey,array of struct,Not Migrated,Low,
+channel.software,listChannelRepos,GET,"sessionKey, channelLabel",array of struct,Not Migrated,Low,
+channel.software,listChildren,GET,"sessionKey, parentLabel",array of struct,Not Migrated,Low,
+channel.software,listErrata,GET,"sessionKey, channelLabel",array of struct,Not Migrated,Low,Overloaded with date range
+channel.software,listErrataByType,GET,"sessionKey, channelLabel, errataType",array of struct,Not Migrated,Low,
+channel.software,listLatestPackages,GET,"sessionKey, channelLabel",array of struct,Not Migrated,Low,
+channel.software,listSubscribedSystems,GET,"sessionKey, channelLabel",array of struct,Not Migrated,Low,
+channel.software,setContactDetails,POST,"sessionKey, channelLabel, maintainerName, maintainerEmail, maintainerPhone, supportPolicy, gpgKeyUrl, gpgKeyId, gpgKeyFp",int,Not Migrated,High,Many string params
+channel.software,setDetails,POST,"sessionKey, channelLabel, details",int,Not Migrated,Medium,
+channel.software,setGloballySubscribable,POST,"sessionKey, channelLabel, subscribable",int,Not Migrated,Low,
+channel.software,setSystemChannels,POST,"sessionKey, serverId, channelLabels",int,Not Migrated,Low,
+channel.software,setUserManageable,POST,"sessionKey, channelLabel, login, manageable",int,Not Migrated,Low,
+channel.software,setUserSubscribable,POST,"sessionKey, channelLabel, login, subscribable",int,Not Migrated,Low,
+channel.software,syncRepo,POST,"sessionKey, channelLabel",int,Not Migrated,Low,
+contentmanagement,attachSource,POST,"sessionKey, projectLabel, sourceType, sourceLabel",struct,Not Migrated,Medium,
+contentmanagement,buildProject,POST,"sessionKey, projectLabel, message",int,Not Migrated,Low,
+contentmanagement,createEnvironment,POST,"sessionKey, projectLabel, predecessorLabel, environmentLabel, environmentName, environmentDescription",struct,Not Migrated,Medium,
+contentmanagement,createFilter,POST,"sessionKey, name, rule, entityType, criteria",struct,Not Migrated,High,Complex criteria struct
+contentmanagement,createProject,POST,"sessionKey, projectLabel, projectName, projectDescription",struct,Not Migrated,Low,
+contentmanagement,deleteEnvironment,POST,"sessionKey, projectLabel, environmentLabel",int,Not Migrated,Low,
+contentmanagement,deleteFilter,POST,"sessionKey, filterId",int,Not Migrated,Low,
+contentmanagement,deleteProject,POST,"sessionKey, projectLabel",int,Not Migrated,Low,
+contentmanagement,listFilters,GET,sessionKey,array of struct,Not Migrated,Low,
+contentmanagement,listProjects,GET,sessionKey,array of struct,Not Migrated,Low,
+contentmanagement,lookupEnvironment,GET,"sessionKey, projectLabel, environmentLabel",struct,Not Migrated,Low,
+contentmanagement,lookupFilter,GET,"sessionKey, filterId",struct,Not Migrated,Low,
+contentmanagement,lookupProject,GET,"sessionKey, projectLabel",struct,Not Migrated,Low,
+contentmanagement,promoteProject,POST,"sessionKey, projectLabel, environmentLabel",int,Not Migrated,Low,
+contentmanagement,updateFilter,POST,"sessionKey, filterId, name, rule, criteria",struct,Not Migrated,High,
+contentmanagement,updateProject,POST,"sessionKey, projectLabel, projectName, projectDescription",struct,Not Migrated,Low,
+distchannel,listDefaultMaps,GET,sessionKey,array of struct,Not Migrated,Low,
+distchannel,listMaps,GET,sessionKey,array of struct,Not Migrated,Low,
+distchannel,setDefaultMap,POST,"sessionKey, osFamilyLabel, channelLabel",int,Not Migrated,Low,
+errata,applicableToChannels,GET,"sessionKey, advisoryName",array of struct,Not Migrated,Low,
+errata,bugzillaFixes,GET,"sessionKey, advisoryName",Map,Not Migrated,High,Returns raw Map
+errata,clone,POST,"sessionKey, channelLabel, advisoryNames",array of struct,Not Migrated,Medium,
+errata,create,POST,"sessionKey, errataInfo, bugs, keywords, packages, publish, channelLabels",struct,Not Migrated,High,Very complex
+errata,delete,POST,"sessionKey, advisoryName",int,Not Migrated,Low,
+errata,findByCve,GET,"sessionKey, cveIdentifier",array of struct,Not Migrated,Low,
+errata,getDetails,GET,"sessionKey, advisoryName",struct,Not Migrated,Medium,
+errata,listAffectedSystems,GET,"sessionKey, advisoryName",array of struct,Not Migrated,Low,
+errata,listByDate,GET,"sessionKey, channelLabel",array of struct,Not Migrated,Low,
+errata,listCves,GET,"sessionKey, advisoryName",array of string,Not Migrated,Low,
+errata,listPackages,GET,"sessionKey, advisoryName",array of struct,Not Migrated,Low,
+errata,publish,POST,"sessionKey, advisoryName, channelLabels",struct,Not Migrated,Low,
+errata,search,GET,"sessionKey, query",array of struct,Not Migrated,Low,
+errata,setDetails,POST,"sessionKey, advisoryName, errataDetails",int,Not Migrated,Medium,
+formula,getFormulasByGroupId,GET,"sessionKey, systemGroupId",array of string,Not Migrated,Low,
+formula,getFormulasByServerId,GET,"sessionKey, serverId",array of string,Not Migrated,Low,
+formula,listFormulas,GET,sessionKey,array of string,Not Migrated,Low,
+formula,setGroupFormulaData,POST,"sessionKey, systemGroupId, formulaName, content",int,Not Migrated,Medium,
+formula,setSystemFormulaData,POST,"sessionKey, serverId, formulaName, content",int,Not Migrated,Medium,
+image,delete,POST,"sessionKey, imageId",int,Not Migrated,Low,
+image,getDetails,GET,"sessionKey, imageId",struct,Not Migrated,Medium,
+image,importContainerImage,POST,"sessionKey, name, version, arch, buildHostId, storeLabel, activationKey, earlyDate",int,Not Migrated,High,Many params
+image,listImages,GET,sessionKey,array of struct,Not Migrated,Low,
+image,scheduleImageBuild,POST,"sessionKey, profileLabel, version, buildHostId, earliestOccurrence",int,Not Migrated,Medium,
+image.profile,create,POST,"sessionKey, label, imageType, storeLabel, path, activationKey",int,Not Migrated,Medium,
+image.profile,delete,POST,"sessionKey, label",int,Not Migrated,Low,
+image.profile,getDetails,GET,"sessionKey, label",struct,Not Migrated,Medium,
+image.profile,listImageProfiles,GET,sessionKey,array of struct,Not Migrated,Low,
+image.store,create,POST,"sessionKey, label, uri, storeType, credentials",int,Not Migrated,Medium,
+image.store,delete,POST,"sessionKey, label",int,Not Migrated,Low,
+image.store,getDetails,GET,"sessionKey, label",struct,Not Migrated,Medium,
+image.store,listImageStores,GET,sessionKey,array of struct,Not Migrated,Low,
+kickstart,createProfile,POST,"sessionKey, profileLabel, vmType, kickstartableTreeLabel, hostIp, rootPassword",int,Not Migrated,Medium,
+kickstart,deleteProfile,POST,"sessionKey, ksLabel",int,Not Migrated,Low,
+kickstart,listKickstarts,GET,sessionKey,array of struct,Not Migrated,Low,
+kickstart,renameProfile,POST,"sessionKey, originalLabel, newLabel",int,Not Migrated,Low,
+kickstart.profile,addScript,POST,"sessionKey, ksLabel, name, contents, interpreter, type, chroot",int,Not Migrated,Medium,
+kickstart.profile,downloadKickstart,GET,"sessionKey, ksLabel, host",string,Not Migrated,Low,
+kickstart.profile,getAdvancedOptions,GET,"sessionKey, ksLabel",array of struct,Not Migrated,Low,
+kickstart.profile,listScripts,GET,"sessionKey, ksLabel",array of struct,Not Migrated,Low,
+kickstart.profile,setAdvancedOptions,POST,"sessionKey, ksLabel, options",int,Not Migrated,Medium,
+kickstart.snippet,createOrUpdate,POST,"sessionKey, name, contents",struct,Not Migrated,Low,
+kickstart.snippet,delete,POST,"sessionKey, name",int,Not Migrated,Low,
+kickstart.snippet,listAll,GET,sessionKey,array of struct,Not Migrated,Low,
+kickstart.tree,create,POST,"sessionKey, treeLabel, basePath, channelLabel, installType",int,Not Migrated,Medium,
+kickstart.tree,delete,POST,"sessionKey, treeLabel",int,Not Migrated,Low,
+kickstart.tree,getDetails,GET,"sessionKey, treeLabel",struct,Not Migrated,Low,
+kickstart.tree,list,GET,"sessionKey, channelLabel",array of struct,Not Migrated,Low,
+maintenance,createSchedule,POST,"sessionKey, name, type, icalContent",int,Not Migrated,Medium,
+maintenance,deleteSchedule,POST,"sessionKey, name",int,Not Migrated,Low,
+maintenance,getScheduleDetails,GET,"sessionKey, name",struct,Not Migrated,Low,
+maintenance,listSchedules,GET,sessionKey,array of struct,Not Migrated,Low,
+maintenance,updateSchedule,POST,"sessionKey, name, type, icalContent",int,Not Migrated,Medium,
+org,create,POST,"sessionKey, orgName, adminLogin, adminPassword, prefix, firstName, lastName, email, usePamAuth",struct,Not Migrated,High,Many params
+org,delete,POST,"sessionKey, orgId",int,Not Migrated,Low,
+org,getDetails,GET,"sessionKey, orgId",struct,Not Migrated,Low,
+org,listOrgs,GET,sessionKey,array of struct,Not Migrated,Low,
+org,listUsers,GET,"sessionKey, orgId",array of struct,Not Migrated,Low,
+org,migrateSystems,POST,"sessionKey, toOrgId, systemIds",array of int,Not Migrated,Low,
+org,updateName,POST,"sessionKey, orgId, name",struct,Not Migrated,Low,
+org.trusts,addTrust,POST,"sessionKey, orgId, trustOrgId",int,Not Migrated,Low,
+org.trusts,getDetails,GET,"sessionKey, orgId",struct,Not Migrated,Low,
+org.trusts,listOrgs,GET,"sessionKey, orgId",array of struct,Not Migrated,Low,
+org.trusts,listTrustedOrgs,GET,"sessionKey, orgId",array of struct,Not Migrated,Low,
+org.trusts,removeTrust,POST,"sessionKey, orgId, trustOrgId",int,Not Migrated,Low,
+packages,findByNvrea,GET,"sessionKey, name, version, release, epoch, archLabel",array of struct,Not Migrated,Medium,
+packages,getDetails,GET,"sessionKey, packageId",struct,Not Migrated,Medium,
+packages,getPackage,GET,"sessionKey, packageId",binary,Not Migrated,High,Binary return type
+packages,listDependencies,GET,"sessionKey, packageId",array of struct,Not Migrated,Low,
+packages,listFiles,GET,"sessionKey, packageId",array of struct,Not Migrated,Low,
+packages,listProvidingChannels,GET,"sessionKey, packageId",array of struct,Not Migrated,Low,
+packages,removePackage,POST,"sessionKey, packageId",int,Not Migrated,Low,
+packages.search,advanced,GET,"sessionKey, luceneQuery",array of struct,Not Migrated,Medium,
+packages.search,name,GET,"sessionKey, name",array of struct,Not Migrated,Low,
+packages.search,nameAndDescription,GET,"sessionKey, query",array of struct,Not Migrated,Low,
+preferences.locale,listLocales,GET,sessionKey,array of string,Not Migrated,Low,
+preferences.locale,listTimeZones,GET,sessionKey,array of struct,Not Migrated,Low,
+preferences.locale,setLocale,POST,"sessionKey, login, locale",int,Not Migrated,Low,
+preferences.locale,setTimeZone,POST,"sessionKey, login, tzLabel",int,Not Migrated,Low,
+proxy,containerConfig,GET,"sessionKey, proxyName, proxyPort, server, maxCache, email",binary,Not Migrated,High,Binary return + 3 deps
+proxy,deactivateProxy,POST,"sessionKey, proxyFqdn",int,Not Migrated,Low,
+proxy,isProxy,GET,"sessionKey, proxyFqdn",int,Not Migrated,Low,
+proxy,listProxies,GET,sessionKey,array of struct,Not Migrated,Low,
+recurring,delete,POST,"sessionKey, scheduleId",int,Not Migrated,Low,
+recurring,listByEntity,GET,"sessionKey, entityType, entityId",array of struct,Not Migrated,Low,
+recurring,lookupById,GET,"sessionKey, recurringActionId",struct,Not Migrated,Low,
+recurring.custom,create,POST,"sessionKey, actionProps",int,Not Migrated,High,Complex actionProps
+recurring.highstate,create,POST,"sessionKey, actionProps",int,Not Migrated,Medium,
+recurring.playbook,create,POST,"sessionKey, actionProps",int,Not Migrated,High,
+saltkey,accept,POST,"sessionKey, minionId",int,Not Migrated,Low,
+saltkey,acceptedList,GET,sessionKey,array of string,Not Migrated,Low,
+saltkey,delete,POST,"sessionKey, minionId",int,Not Migrated,Low,
+saltkey,pendingList,GET,sessionKey,array of string,Not Migrated,Low,
+saltkey,reject,POST,"sessionKey, minionId",int,Not Migrated,Low,
+saltkey,rejectedList,GET,sessionKey,array of string,Not Migrated,Low,
+schedule,cancelActions,POST,"sessionKey, actionIds",int,Not Migrated,Low,
+schedule,deleteActions,POST,"sessionKey, actionIds",int,Not Migrated,Low,
+schedule,listAllActions,GET,sessionKey,array of struct,Not Migrated,Low,
+schedule,listAllCompletedActions,GET,sessionKey,array of struct,Not Migrated,Low,
+schedule,listAllFailedActions,GET,sessionKey,array of struct,Not Migrated,Low,
+schedule,listCompletedSystems,GET,"sessionKey, actionId",array of struct,Not Migrated,Low,
+schedule,listFailedSystems,GET,"sessionKey, actionId",array of struct,Not Migrated,Low,
+schedule,listInProgressActions,GET,sessionKey,array of struct,Not Migrated,Low,
+schedule,rescheduleActions,POST,"sessionKey, actionIds, onlyFailed",int,Not Migrated,Low,
+scripts,createScript,POST,"sessionKey, username, groupname, timeout, script",string,Not Migrated,Medium,
+scripts,deleteScript,POST,"sessionKey, scriptId",int,Not Migrated,Low,
+scripts,getScript,GET,"sessionKey, scriptId",struct,Not Migrated,Low,
+scripts,runScript,POST,"sessionKey, systemIds, username, groupname, timeout, script, earliestOccurrence",int,Not Migrated,High,
+sync.content,addCredentials,POST,"sessionKey, login, password",int,Not Migrated,Low,
+sync.content,deleteCredentials,POST,"sessionKey, login",int,Not Migrated,Low,
+sync.content,listCredentials,GET,sessionKey,array of struct,Not Migrated,Low,
+sync.content,listProducts,GET,sessionKey,array of struct,Not Migrated,Low,
+sync.content,synchronizeProducts,POST,"sessionKey, products",int,Not Migrated,Medium,
+sync.hub,isISSMaster,GET,sessionKey,boolean,Not Migrated,Low,
+sync.hub,isISSSlave,GET,sessionKey,boolean,Not Migrated,Low,
+sync.hub,listISSMasters,GET,sessionKey,array of struct,Not Migrated,Low,
+sync.hub,listISSSlaves,GET,sessionKey,array of struct,Not Migrated,Low,
+sync.hub,makeISSMaster,POST,sessionKey,int,Not Migrated,Low,
+sync.hub,makeISSSlave,POST,"sessionKey, masterFqdn, enabled, allowAllOrgs",int,Not Migrated,Low,
+sync.hub,removeISSMaster,POST,sessionKey,int,Not Migrated,Low,
+sync.hub,removeISSSlave,POST,"sessionKey, slaveId",int,Not Migrated,Low,
+system,addEntitlements,POST,"sessionKey, serverId, entitlements",int,Not Migrated,Low,
+system,applyErrata,POST,"sessionKey, serverId, errataIds",int,Not Migrated,Low,Overloaded with date
+system,comparePackages,GET,"sessionKey, serverId1, serverId2",array of struct,Not Migrated,Low,
+system,deleteSystems,POST,"sessionKey, serverIds",int,Not Migrated,Low,
+system,getDetails,GET,"sessionKey, serverId",struct,Not Migrated,Medium,Complex return struct
+system,getCpu,GET,"sessionKey, serverId",struct,Not Migrated,Low,
+system,getEntitlements,GET,"sessionKey, serverId",array of string,Not Migrated,Low,
+system,getEventHistory,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system,getId,GET,"sessionKey, serverName",array of struct,Not Migrated,Low,
+system,getMemory,GET,"sessionKey, serverId",struct,Not Migrated,Low,
+system,getRunningKernel,GET,"sessionKey, serverId",string,Not Migrated,Low,
+system,getUnscheduledErrata,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system,listActivationKeys,GET,"sessionKey, serverId",array of string,Not Migrated,Low,
+system,listAdministrators,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system,listDuplicatesByHostname,GET,sessionKey,array of struct,Not Migrated,Low,
+system,listErrata,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,Overloaded with date range
+system,listGroups,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system,listInactiveSystems,GET,sessionKey,array of struct,Not Migrated,Low,Overloaded with days
+system,listInstalledPackages,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system,listLatestUpgradablePackages,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system,listMigrationTargets,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system,listOutOfDateSystems,GET,sessionKey,array of struct,Not Migrated,Low,
+system,listSystems,GET,sessionKey,array of struct,Not Migrated,Low,
+system,listVirtualGuests,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system,removeEntitlements,POST,"sessionKey, serverId, entitlements",int,Not Migrated,Low,
+system,scheduleApplyHighstate,POST,"sessionKey, serverId, earliestOccurrence, test",int,Not Migrated,Low,
+system,scheduleHardwareRefresh,POST,"sessionKey, serverId, earliestOccurrence",int,Not Migrated,Low,
+system,schedulePackageInstall,POST,"sessionKey, serverId, packageIds, earliestOccurrence",int,Not Migrated,Low,
+system,scheduleReboot,POST,"sessionKey, serverId, earliestOccurrence",int,Not Migrated,Low,
+system,scheduleScriptRun,POST,"sessionKey, serverIds, username, groupname, timeout, script, earliestOccurrence",int,Not Migrated,High,
+system,setBaseChannel,POST,"sessionKey, serverId, channelLabel",int,Not Migrated,Low,
+system,setChildChannels,POST,"sessionKey, serverId, channelLabels",int,Not Migrated,Low,
+system,setDetails,POST,"sessionKey, serverId, details",int,Not Migrated,Medium,
+system,setGroupMembership,POST,"sessionKey, serverId, serverGroupId, member",int,Not Migrated,Low,
+system,whoRegistered,GET,"sessionKey, serverId",struct,Not Migrated,Low,
+system.appstreams,disableModuleStreams,POST,"sessionKey, serverId, moduleStreamDataList",int,Not Migrated,High,
+system.appstreams,enableModuleStreams,POST,"sessionKey, serverId, moduleStreamDataList",int,Not Migrated,High,
+system.appstreams,listModuleStreams,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system.config,addChannels,POST,"sessionKey, serverIds, configChannelLabels, addToTop",int,Not Migrated,Low,
+system.config,deployAll,POST,"sessionKey, serverIds, earliestOccurrence",int,Not Migrated,Low,
+system.config,listChannels,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system.config,listFiles,GET,"sessionKey, serverId, listType",array of struct,Not Migrated,Low,
+system.config,removeChannels,POST,"sessionKey, serverIds, configChannelLabels",int,Not Migrated,Low,
+system.config,setChannels,POST,"sessionKey, serverIds, configChannelLabels",int,Not Migrated,Low,
+system.custominfo,createKey,POST,"sessionKey, keyLabel, keyDescription",int,Not Migrated,Low,
+system.custominfo,deleteKey,POST,"sessionKey, keyLabel",int,Not Migrated,Low,
+system.custominfo,listAllKeys,GET,sessionKey,array of struct,Not Migrated,Low,
+system.custominfo,updateKey,POST,"sessionKey, keyLabel, keyDescription",int,Not Migrated,Low,
+system.monitoring,listEndpoints,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system.provisioning.powermanagement,getDetails,GET,"sessionKey, serverId",struct,Not Migrated,Low,
+system.provisioning.powermanagement,listTypes,GET,sessionKey,array of string,Not Migrated,Low,
+system.provisioning.powermanagement,powerOff,POST,"sessionKey, serverId",int,Not Migrated,Low,
+system.provisioning.powermanagement,powerOn,POST,"sessionKey, serverId",int,Not Migrated,Low,
+system.provisioning.powermanagement,reboot,POST,"sessionKey, serverId",int,Not Migrated,Low,
+system.provisioning.snapshot,deleteSnapshot,POST,"sessionKey, snapshotId",int,Not Migrated,Low,
+system.provisioning.snapshot,listSnapshots,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system.provisioning.snapshot,rollbackToSnapshot,POST,"sessionKey, serverId, snapshotId",int,Not Migrated,Low,
+system.scap,deleteXccdfScan,POST,"sessionKey, xid",int,Not Migrated,Low,
+system.scap,getXccdfScanDetails,GET,"sessionKey, xid",struct,Not Migrated,Low,
+system.scap,listXccdfScans,GET,"sessionKey, serverId",array of struct,Not Migrated,Low,
+system.scap,scheduleXccdfScan,POST,"sessionKey, serverIds, xccdfPath, xccdfParams, date",int,Not Migrated,Medium,
+system.search,hostname,GET,"sessionKey, searchString",array of struct,Not Migrated,Low,
+system.search,ip,GET,"sessionKey, searchString",array of struct,Not Migrated,Low,
+system.search,nameAndDescription,GET,"sessionKey, searchString",array of struct,Not Migrated,Low,
+systemgroup,addOrRemoveSystems,POST,"sessionKey, systemGroupName, serverIds, add",int,Not Migrated,Low,
+systemgroup,create,POST,"sessionKey, name, description",struct,Not Migrated,Low,
+systemgroup,delete,POST,"sessionKey, systemGroupName",int,Not Migrated,Low,
+systemgroup,getDetails,GET,"sessionKey, systemGroupName",struct,Not Migrated,Low,
+systemgroup,listAdministrators,GET,"sessionKey, systemGroupName",array of struct,Not Migrated,Low,
+systemgroup,listAllGroups,GET,sessionKey,array of struct,Not Migrated,Low,
+systemgroup,listSystems,GET,"sessionKey, systemGroupName",array of struct,Not Migrated,Low,
+systemgroup,scheduleApplyErrataToActive,POST,"sessionKey, systemGroupName, errataIds",array of int,Not Migrated,Low,Overloaded with date
+systemgroup,update,POST,"sessionKey, systemGroupName, description",struct,Not Migrated,Low,
+user,addRole,POST,"sessionKey, login, role",int,Not Migrated,Low,
+user,create,POST,"sessionKey, login, password, firstName, lastName, email",int,Not Migrated,Medium,Overloaded
+user,delete,POST,"sessionKey, login",int,Not Migrated,Low,
+user,disable,POST,"sessionKey, login",int,Not Migrated,Low,
+user,enable,POST,"sessionKey, login",int,Not Migrated,Low,
+user,getDetails,GET,"sessionKey, login",struct,Not Migrated,Medium,
+user,listRoles,GET,"sessionKey, login",array of string,Not Migrated,Low,
+user,listUsers,GET,sessionKey,array of struct,Not Migrated,Low,
+user,removeRole,POST,"sessionKey, login, role",int,Not Migrated,Low,
+user,setDetails,POST,"sessionKey, login, details",int,Not Migrated,Medium,
+user.external,createExternalGroupToRoleMap,POST,"sessionKey, name, roles",struct,Not Migrated,Low,
+user.external,getDefaultOrg,GET,sessionKey,string,Not Migrated,Low,
+user.external,listExternalGroupToRoleMaps,GET,sessionKey,array of struct,Not Migrated,Low,
+user.external,setDefaultOrg,POST,"sessionKey, orgId",int,Not Migrated,Low,
+user.notifications,delete,POST,"sessionKey, notificationId",int,Not Migrated,Low,
+user.notifications,getCount,GET,sessionKey,int,Not Migrated,Low,
+user.notifications,list,GET,sessionKey,array of struct,Not Migrated,Low,
+user.notifications,setAllRead,POST,sessionKey,int,Not Migrated,Low,
+user.notifications,setRead,POST,"sessionKey, notificationId, flagRead",int,Not Migrated,Low,
+virtualhostmanager,create,POST,"sessionKey, label, moduleName, parameters",int,Not Migrated,Medium,Map parameters
+virtualhostmanager,delete,POST,"sessionKey, label",int,Not Migrated,Low,
+virtualhostmanager,getDetail,GET,"sessionKey, label",struct,Not Migrated,Low,
+virtualhostmanager,listVirtualHostManagers,GET,sessionKey,array of struct,Not Migrated,Low,`;
+
+function parseCSV(txt) {
+  const lines = txt.trim().split('\n');
+  const headers = lines[0].split(',');
+  return lines.slice(1).map(line => {
+    const vals = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ; }
+      else if (line[i] === ',' && !inQ) { vals.push(cur); cur = ''; }
+      else { cur += line[i]; }
+    }
+    vals.push(cur);
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (vals[i] || '').trim());
+    return obj;
+  });
+}
+
+let data = parseCSV(RAW);
+let sortKey = 'namespace', sortDir = 1;
+
+function getStatus(row) {
+  if (row.notes && row.notes.includes('@ApiIgnore')) return 'http-ignored';
+  return row.status === 'Migrated' ? 'migrated' : 'not-migrated';
+}
+
+function render() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const filterNs = document.getElementById('filterNs').value;
+  const filterStatus = document.getElementById('filterStatus').value;
+  const filterMethod = document.getElementById('filterMethod').value;
+  const filterComplexity = document.getElementById('filterComplexity').value;
+
+  let rows = data.filter(r => {
+    if (search && !Object.values(r).join(' ').toLowerCase().includes(search)) return false;
+    if (filterNs && r.namespace !== filterNs) return false;
+    if (filterStatus && r.status !== filterStatus) return false;
+    if (filterMethod && r.http !== filterMethod) return false;
+    if (filterComplexity && r.complexity !== filterComplexity) return false;
+    return true;
+  });
+
+  rows.sort((a, b) => {
+    const av = a[sortKey] || '', bv = b[sortKey] || '';
+    return av < bv ? -sortDir : av > bv ? sortDir : 0;
+  });
+
+  const total = data.length;
+  const migrated = data.filter(r => r.status === 'Migrated').length;
+  const ignored = data.filter(r => r.notes && r.notes.includes('@ApiIgnore')).length;
+  const high = data.filter(r => r.complexity === 'High').length;
+  const namespaces = [...new Set(data.map(r => r.namespace))].length;
+  const pct = Math.round(migrated / total * 100);
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="stat-label">Total Methods</div><div class="stat-val blue">${total}</div></div>
+    <div class="stat"><div class="stat-label">Namespaces</div><div class="stat-val purple">${namespaces}</div></div>
+    <div class="stat"><div class="stat-label">Migrated</div><div class="stat-val green">${migrated}</div></div>
+    <div class="stat"><div class="stat-label">Pending</div><div class="stat-val amber">${total - migrated - ignored}</div></div>
+    <div class="stat"><div class="stat-label">HTTP Ignored</div><div class="stat-val" style="color:#b45309">${ignored}</div></div>
+    <div class="stat"><div class="stat-label">High Complexity</div><div class="stat-val red">${high}</div></div>
+  `;
+
+  document.getElementById('pbar').style.width = pct + '%';
+  document.getElementById('pct').textContent = pct + '%';
+  document.getElementById('count-info').textContent = `Showing ${rows.length} of ${total} methods`;
+
+  const tbody = document.getElementById('tbody');
+  const noRes = document.getElementById('no-results');
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '';
+    noRes.style.display = 'block';
+    return;
+  }
+  noRes.style.display = 'none';
+
+  let prevNs = '', rowNum = 0;
+  tbody.innerHTML = rows.map((r, i) => {
+    const st = getStatus(r);
+    const statusLabel = st === 'migrated' ? 'Migrated' : st === 'http-ignored' ? 'HTTP Ignored' : 'Not Migrated';
+    const isNewNs = r.namespace !== prevNs;
+    prevNs = r.namespace;
+    rowNum++;
+    return `<tr>
+      <td style="color:#9ca3af;font-size:11px">${rowNum}</td>
+      <td>${isNewNs ? `<span class="ns">${r.namespace}</span>` : `<span style="color:#d1d5db;font-size:11px">↳</span>`}</td>
+      <td class="method">${r.method}</td>
+      <td><span class="badge ${r.http.toLowerCase()}">${r.http}</span></td>
+      <td class="params" title="${r.params}">${r.params}</td>
+      <td class="ret">${r.ret}</td>
+      <td><span class="badge ${st}">${statusLabel}</span></td>
+      <td><span class="badge ${r.complexity.toLowerCase()}">${r.complexity}</span></td>
+      <td class="notes" title="${r.notes}">${r.notes}</td>
+    </tr>`;
+  }).join('');
+}
+
+function sortBy(key) {
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = 1; }
+  render();
+}
+
+const nsSet = [...new Set(data.map(r => r.namespace))].sort();
+const nsSelect = document.getElementById('filterNs');
+nsSet.forEach(ns => {
+  const opt = document.createElement('option');
+  opt.value = ns; opt.textContent = ns;
+  nsSelect.appendChild(opt);
+});
+
+['search','filterNs','filterStatus','filterMethod','filterComplexity'].forEach(id => {
+  document.getElementById(id).addEventListener('input', render);
+  document.getElementById(id).addEventListener('change', render);
+});
+
+render();
+</script>
+</body>
+</html>
